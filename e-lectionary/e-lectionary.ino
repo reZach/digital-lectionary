@@ -10,7 +10,8 @@
 #include "EPD.h"
 #include "GUI_Paint.h"
 #include <stdlib.h>
-#include "data.h"
+#include "data-indexed.h"
+#include "indexVerses.h"
 
 /* ----- Constants ----- */
 const int EPD_WIDTH = EPD_4IN2_WIDTH;
@@ -67,6 +68,17 @@ void loop()
 {
   DateTime time = rtc.now();
 
+  // int rand = random(300);
+  // if (rand < 50){
+  //   rtc.adjust(DateTime(2034, 12, 16, 3, 0, 0));
+  // } else if (rand < 100){
+  //   rtc.adjust(DateTime(2044, 4, 16, 3, 0, 0));
+  // } else if (rand < 150) {
+  //   rtc.adjust(DateTime(2054, 6, 16, 3, 0, 0));
+  // } else if (rand < 200) {
+  //   rtc.adjust(DateTime(2055, 1, 1, 3, 0, 0));
+  // }
+
   /* -- check if day changes -- */
   if (prevDay != time.day())
   {
@@ -81,7 +93,7 @@ void loop()
     Serial.println(formatted_date);
     /* ------------------------------------------------- */
 
-    /* -- Current Date in format "2024-01-01" -- */
+    /* -- Current Date in format "20240101" -- */
     char format_2[50];
     String cur_day;
     String cur_mon;
@@ -103,11 +115,11 @@ void loop()
       cur_mon = String(time.month());
     }
 
-    snprintf(format_2, sizeof(format_2), "%d-%s-%s", time.year(), cur_mon, cur_day);
+    snprintf(format_2, sizeof(format_2), "%d%s%s", time.year(), cur_mon, cur_day);
     current_date = format_2;
     Serial.print("Date : ");
     Serial.println(current_date);
-    processYearData(data, sizeof(data) / sizeof(data[0]), current_date);
+    processYearData(dataIndexed, sizeof(dataIndexed) / sizeof(dataIndexed[0]), indexVerses, current_date);
     /* ------------------------------------------------- */
 
     if (!dateFound)
@@ -200,12 +212,12 @@ String extractField(const String &line, int index)
 }
 
 /* -- check if current date exists in data.h file -- */
-void processYearData(const char *data[], int dataSize, String date)
+void processYearData(const char *dataIndexed[], int dataSize, const char *indexVerses[], String date)
 {
   for (int i = 0; i < dataSize; i++)
   {
-    String line(data[i]);
-    Serial.println(line);
+    String line(dataIndexed[i]);
+    // Serial.println(line);
 
     String idx = extractField(line, 0);
 
@@ -213,9 +225,18 @@ void processYearData(const char *data[], int dataSize, String date)
     {
       Serial.print("Extracted date: ");
       Serial.println(idx);
-      row1 = extractField(line, 1);
-      row2 = extractField(line, 2);
-      row3 = extractField(line, 3);
+
+      String eRow1 = extractField(line, 1);
+      String eRow2 = extractField(line, 2);
+      String eRow3 = extractField(line, 3);
+
+      if (eRow1 != "")
+        row1 = indexVerses[extractField(line, 1).toInt()];
+      if (eRow2 != "")
+        row2 = indexVerses[extractField(line, 2).toInt()];
+      if (eRow3 != "")
+        row3 = indexVerses[extractField(line, 3).toInt()];
+
       dateFound = true;
 
       Serial.print("Row1: ");
