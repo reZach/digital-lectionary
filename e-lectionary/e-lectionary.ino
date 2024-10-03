@@ -10,8 +10,8 @@
 #include "EPD.h"
 #include "GUI_Paint.h"
 #include <stdlib.h>
-#include "data-indexed.h"
-#include "indexVerses.h"
+#include "data_indexed.h"
+#include "reading_index.h"
 
 /* ----- Constants ----- */
 const int EPD_WIDTH = EPD_4IN2_WIDTH;
@@ -119,7 +119,7 @@ void loop()
     current_date = format_2;
     Serial.print("Date : ");
     Serial.println(current_date);
-    processYearData(dataIndexed, sizeof(dataIndexed) / sizeof(dataIndexed[0]), indexVerses, current_date);
+    processYearData(dataIndexed, sizeof(dataIndexed) / sizeof(dataIndexed[0]), readingsIndex, current_date);
     /* ------------------------------------------------- */
 
     if (!dateFound)
@@ -212,7 +212,7 @@ String extractField(const String &line, int index)
 }
 
 /* -- check if current date exists in data.h file -- */
-void processYearData(const char *dataIndexed[], int dataSize, const char *indexVerses[], String date)
+void processYearData(const char *dataIndexed[], int dataSize, const char *readingsIndex[], String date)
 {
   for (int i = 0; i < dataSize; i++)
   {
@@ -231,11 +231,11 @@ void processYearData(const char *dataIndexed[], int dataSize, const char *indexV
       String eRow3 = extractField(line, 3);
 
       if (eRow1 != "")
-        row1 = indexVerses[extractField(line, 1).toInt()];
+        row1 = readingsIndex[extractField(line, 1).toInt()];
       if (eRow2 != "")
-        row2 = indexVerses[extractField(line, 2).toInt()];
+        row2 = readingsIndex[extractField(line, 2).toInt()];
       if (eRow3 != "")
-        row3 = indexVerses[extractField(line, 3).toInt()];
+        row3 = readingsIndex[extractField(line, 3).toInt()];
 
       dateFound = true;
 
