@@ -1,59 +1,52 @@
-/* ----- Display Pins ----- */
-// busy = 25 , rst = 26 , dc = 27 , cs = 15 , clk = 13 , din = 14 , VCC = 3V3, GND
-
-/* ----- RTC Pins ----- */
-// SCL = 22 , SDA = 21 , VCC = VIN, GND = GN
-
-#include <Wire.h>
 #include <WiFi.h>
-#include "time.h"
+#include <esp_sleep.h>
+#include <stdlib.h>
 #include "RTClib.h"
 #include "DEV_Config.h"
 #include "EPD.h"
 #include "GUI_Paint.h"
-#include <stdlib.h>
 #include "data_indexed.h"
 #include "reading_index.h"
 
-/* ----- Constants ----- */
-const int EPD_WIDTH = EPD_4IN2_WIDTH;
-const int EPD_HEIGHT = EPD_4IN2_HEIGHT;
 
-/* ----- Variables ----- */
+RTC_DATA_ATTR int boot_count = 0;
+RTC_DATA_ATTR int screen_generated = 0;
+
+const PROGMEM int EPD_WIDTH = EPD_4IN2_WIDTH;
+const PROGMEM int EPD_HEIGHT = EPD_4IN2_HEIGHT;
+const PROGMEM char *WIFI_SSID = "";
+const PROGMEM char *WIFI_PW = "";
+const PROGMEM char *NTP_SERVER = "pool.ntp.org";
+const PROGMEM long GMT_OFFSET_SEC = -6 * 3600;  // timezone * 3600 (seconds in an hour); CST = -6
+const PROGMEM int DAYLIGHT_OFFSET_SEC = 3600;
+const PROGMEM String NOT_FOUND = "Not found";
+const PROGMEM String DATE_PREFIX = "Date: ";
+
 String formatted_date;  // to store date in "December 5th, 2024" format (to show on display)
 String current_date;    // to store date in "2024-01-01" format (to compare with data.h)
 String row1 = "";       // showing rows on display
 String row2 = "";
 String row3 = "";
-const PROGMEM String notFound = "Not found";
-const PROGMEM String datePrefix = "Date:";
-const PROGMEM char* wifi_ssid = "";
-const PROGMEM char* wifi_pw = "";
-
-const char *ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -5 * 3600; // timezone * 3600 (seconds in an hour); CST = -5
-const int daylightOffset_sec = 3600;
-
-bool dateFound = false;  // to check if date is found in data.h
-int prevDay = 0;         // checking day condition
-
 String monthNames[] = { F("January"), F("February"), F("March"), F("April"), F("May"), F("June"),
-                        F("July"), F("August"), F("September"), F("October"), F("November"), F("December") };
-
+                                F("July"), F("August"), F("September"), F("October"), F("November"), F("December") };
 String dayNames[] = { F("1st"), F("2nd"), F("3rd"), F("4th"), F("5th"), F("6th"), F("7th"), F("8th"), F("9th"), F("10th"),
-                      "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
-                      "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th",
-                      "31st" };
+                              F("11th"), F("12th"), F("13th"), F("14th"), F("15th"), F("16th"), F("17th"), F("18th"), F("19th"), F("20th"),
+                              F("21st"), F("22nd"), F("23rd"), F("24th"), F("25th"), F("26th"), F("27th"), F("28th"), F("29th"), F("30th"),
+                              F("31st") };
 
-/* -- Create a new image cache -- */
+RTC_DS3231 rtc;
 UBYTE *BlackImage;
 
-/* ----- init RTC ----- */
-RTC_DS3231 rtc;
+// Is ran after waking up from a deep sleep
+void RTC_IRAM_ATTR esp_wake_deep_sleep() {
+  esp_default_wake_deep_sleep();
+  boot_count++;
+}
 
 void setup() {
   Serial.begin(115200);
 
+  // Initialize the RTC
   if (!rtc.begin()) {
     while (1)
       delay(10);
@@ -61,36 +54,24 @@ void setup() {
 
   setCurrentTime();
 
-  DEV_Module_Init();
-  EPD_4IN2_V2_Init();   // EPD_4IN2_Init_Fast();
-  EPD_4IN2_V2_Clear();  // EPD_4IN2_Clear();
-  DEV_Delay_ms(500);
-}
-
-void loop() {
   DateTime time = rtc.now();
+  int hour_diff = 23 - time.hour();
+  int min_diff = 59 - time.minute();
+  int sec_diff = 59 - time.second();
 
-  // int rand = random(300);
-  // if (rand < 50){
-  //   rtc.adjust(DateTime(2034, 12, 16, 3, 0, 0));
-  // } else if (rand < 100){
-  //   rtc.adjust(DateTime(2044, 4, 16, 3, 0, 0));
-  // } else if (rand < 150) {
-  //   rtc.adjust(DateTime(2054, 6, 16, 3, 0, 0));
-  // } else if (rand < 200) {
-  //   rtc.adjust(DateTime(2055, 1, 1, 3, 0, 0));
-  // }
 
-  /* -- check if day changes -- */
-  if (prevDay != time.day()) {
-    prevDay = time.day();
-    dateFound = false;
+  if (hour_diff == 23 && min_diff == 59 || screen_generated == 0) {
+
+    DEV_Module_Init();
+    EPD_4IN2_V2_Init();
+    EPD_4IN2_V2_Clear();
+    DEV_Delay_ms(500);
 
     /* -- Current Date in format "December 5th, 2024" -- */
     char format_1[50];
     snprintf(format_1, sizeof(format_1), "%s %s, %d", monthNames[time.month() - 1].c_str(), dayNames[time.day() - 1].c_str(), time.year());
     formatted_date = format_1;
-    Serial.print(datePrefix);
+    Serial.print(DATE_PREFIX);
     Serial.println(formatted_date);
     /* ------------------------------------------------- */
 
@@ -112,27 +93,31 @@ void loop() {
 
     snprintf(format_2, sizeof(format_2), "%d%s%s", time.year(), cur_mon, cur_day);
     current_date = format_2;
-    Serial.print(datePrefix);
+    Serial.print(DATE_PREFIX);
     Serial.println(current_date);
     processYearData(dataIndexed, sizeof(dataIndexed) / sizeof(dataIndexed[0]), readingsIndex, current_date);
     /* ------------------------------------------------- */
 
-    if (!dateFound) {
-      row1 = notFound;
-      row2 = notFound;
-      row3 = notFound;
-    }
-
     displayDate();
-  }
+
+    screen_generated = 1;
+
+    Serial.println("bootcount");
+    Serial.println(boot_count);
+    Serial.println(((hour_diff * 3600) + (min_diff * 60) + sec_diff));
+    esp_deep_sleep(((hour_diff * 3600) + (min_diff * 60) + sec_diff) * 1000000);  // enter deep sleep until 12am the next day
+  }  
+}
+
+void loop() {
 }
 
 // Attempt to connect to wifi and set the current time
 void setCurrentTime() {
-  int tries = 10;
+  int tries = 5;
 
   WiFi.mode(WIFI_STA);
-  WiFi.begin(wifi_ssid, wifi_pw);
+  WiFi.begin(WIFI_SSID, WIFI_PW);
 
   while (WiFi.status() != WL_CONNECTED && tries > 0) {
     delay(1000);
@@ -142,7 +127,7 @@ void setCurrentTime() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println(F("Connected to wifi"));
 
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
 
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
@@ -163,7 +148,7 @@ void setCurrentTime() {
     Serial.println(F("Getting the date from the NTP"));
 
     // rtc.adjust(DateTime(2070, 12, 16, 3, 0, 0));
-    rtc.adjust(DateTime(1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));    
+    rtc.adjust(DateTime(1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
 
     // Disconnect the wifi
     WiFi.disconnect(true);
@@ -265,8 +250,6 @@ void processYearData(const char *dataIndexed[], int dataSize, const char *readin
         row2 = readingsIndex[extractField(line, 2).toInt()];
       if (eRow3 != "")
         row3 = readingsIndex[extractField(line, 3).toInt()];
-
-      dateFound = true;
 
       Serial.print("Row1: ");
       Serial.println(row1);
