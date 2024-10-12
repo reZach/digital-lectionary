@@ -9,8 +9,7 @@
 #include "reading_index.h"
 
 
-RTC_DATA_ATTR unsigned int boot_count = 0;
-RTC_DATA_ATTR unsigned int error_count = 0;
+RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int screen_generated = 0;
 
 const PROGMEM int EPD_WIDTH = EPD_4IN2_WIDTH;
@@ -59,7 +58,10 @@ void setup() {
   int hour_diff = 23 - time.hour();
   int min_diff = 59 - time.minute();
   int sec_diff = 59 - time.second();
-  uint64_t time_to_sleep_until_next_day = ((hour_diff * 3600) + (min_diff * 60) + sec_diff) * 1000000;  // This number is in seconds until 12am the next day
+  Serial.println(hour_diff);
+  Serial.println(min_diff);
+  Serial.println(sec_diff);
+  uint64_t time_to_sleep = ((uint64_t)((hour_diff * 3600) + (min_diff * 60) + sec_diff)) * ((uint64_t)1000000);  // This number is in seconds until 12am the next day
 
   // If the date hasn't generated, or we are in the wee-early
   // hours of the morning (12am), generate the verses
@@ -108,16 +110,13 @@ void setup() {
     Serial.println("boot_count");
     Serial.println(boot_count);
 
-    esp_deep_sleep(time_to_sleep_until_next_day);  // enter deep sleep until 12am the next day
+    esp_deep_sleep(time_to_sleep);  // enter deep sleep until 12am the next day
   } else {
 
-    // In the case something errors out, let's log
-    // the value to see how many time it errors
-    error_count++;
-    Serial.println("error_count");
-    Serial.println(boot_count);
-    
-    esp_deep_sleep(time_to_sleep_until_next_day);  // enter deep sleep until 12am the next day
+    // In the case something errors out, let's log it
+    Serial.println("error");
+
+    esp_deep_sleep(time_to_sleep);  // enter deep sleep until 12am the next day
   }
 }
 
