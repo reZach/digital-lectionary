@@ -9,7 +9,8 @@
 #include "reading_index.h"
 
 
-RTC_DATA_ATTR int boot_count = 0;
+RTC_DATA_ATTR unsigned int boot_count = 0;
+RTC_DATA_ATTR unsigned int error_count = 0;
 RTC_DATA_ATTR int screen_generated = 0;
 
 const PROGMEM int EPD_WIDTH = EPD_4IN2_WIDTH;
@@ -28,11 +29,11 @@ String row1 = "";       // showing rows on display
 String row2 = "";
 String row3 = "";
 String monthNames[] = { F("January"), F("February"), F("March"), F("April"), F("May"), F("June"),
-                                F("July"), F("August"), F("September"), F("October"), F("November"), F("December") };
+                        F("July"), F("August"), F("September"), F("October"), F("November"), F("December") };
 String dayNames[] = { F("1st"), F("2nd"), F("3rd"), F("4th"), F("5th"), F("6th"), F("7th"), F("8th"), F("9th"), F("10th"),
-                              F("11th"), F("12th"), F("13th"), F("14th"), F("15th"), F("16th"), F("17th"), F("18th"), F("19th"), F("20th"),
-                              F("21st"), F("22nd"), F("23rd"), F("24th"), F("25th"), F("26th"), F("27th"), F("28th"), F("29th"), F("30th"),
-                              F("31st") };
+                      F("11th"), F("12th"), F("13th"), F("14th"), F("15th"), F("16th"), F("17th"), F("18th"), F("19th"), F("20th"),
+                      F("21st"), F("22nd"), F("23rd"), F("24th"), F("25th"), F("26th"), F("27th"), F("28th"), F("29th"), F("30th"),
+                      F("31st") };
 
 RTC_DS3231 rtc;
 UBYTE *BlackImage;
@@ -58,8 +59,10 @@ void setup() {
   int hour_diff = 23 - time.hour();
   int min_diff = 59 - time.minute();
   int sec_diff = 59 - time.second();
+  uint64_t time_to_sleep_until_next_day = ((hour_diff * 3600) + (min_diff * 60) + sec_diff) * 1000000;  // This number is in seconds until 12am the next day
 
-
+  // If the date hasn't generated, or we are in the wee-early
+  // hours of the morning (12am), generate the verses
   if (hour_diff == 23 && min_diff == 59 || screen_generated == 0) {
 
     DEV_Module_Init();
@@ -102,11 +105,20 @@ void setup() {
 
     screen_generated = 1;
 
-    Serial.println("bootcount");
+    Serial.println("boot_count");
     Serial.println(boot_count);
-    Serial.println(((hour_diff * 3600) + (min_diff * 60) + sec_diff));
-    esp_deep_sleep(((hour_diff * 3600) + (min_diff * 60) + sec_diff) * 1000000);  // enter deep sleep until 12am the next day
-  }  
+
+    esp_deep_sleep(time_to_sleep_until_next_day);  // enter deep sleep until 12am the next day
+  } else {
+
+    // In the case something errors out, let's log
+    // the value to see how many time it errors
+    error_count++;
+    Serial.println("error_count");
+    Serial.println(boot_count);
+    
+    esp_deep_sleep(time_to_sleep_until_next_day);  // enter deep sleep until 12am the next day
+  }
 }
 
 void loop() {
