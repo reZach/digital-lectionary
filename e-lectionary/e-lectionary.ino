@@ -62,7 +62,7 @@ void setup() {
   Serial.println(hour_diff);
   Serial.println(min_diff);
   Serial.println(sec_diff);
-  uint64_t time_to_sleep = ((uint64_t)((hour_diff * 3600) + (min_diff * 60) + sec_diff)) * ((uint64_t)1000000);  // This number is in seconds until 12am the next day
+  uint64_t time_to_sleep = ((uint64_t)((hour_diff * 3600) + (min_diff * 60) + sec_diff)) * ((uint64_t)1000000);  // This number is in microseconds until 12am the next day  
 
   // If the date hasn't generated, or we are in the wee-early
   // hours of the morning (12am), generate the verses
