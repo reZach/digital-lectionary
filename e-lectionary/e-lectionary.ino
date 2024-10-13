@@ -16,7 +16,7 @@ const PROGMEM int EPD_WIDTH = EPD_4IN2_WIDTH;
 const PROGMEM int EPD_HEIGHT = EPD_4IN2_HEIGHT;
 const PROGMEM char *WIFI_SSID = "";
 const PROGMEM char *WIFI_PW = "";
-const PROGMEM char *NTP_SERVER = "pool.ntp.org";
+const PROGMEM char *NTP_SERVER = "pool.ntp.org"; 
 const PROGMEM long GMT_OFFSET_SEC = -6 * 3600;  // timezone * 3600 (seconds in an hour); CST = -6
 const PROGMEM int DAYLIGHT_OFFSET_SEC = 3600;
 const PROGMEM String NOT_FOUND = "Not found";
@@ -58,6 +58,7 @@ void setup() {
   int hour_diff = 23 - time.hour();
   int min_diff = 59 - time.minute();
   int sec_diff = 59 - time.second();
+  Serial.println("Diffs");
   Serial.println(hour_diff);
   Serial.println(min_diff);
   Serial.println(sec_diff);
@@ -65,7 +66,7 @@ void setup() {
 
   // If the date hasn't generated, or we are in the wee-early
   // hours of the morning (12am), generate the verses
-  if (hour_diff == 23 && min_diff == 59 || screen_generated == 0) {
+  if (hour_diff == 23 && min_diff >= 55 || screen_generated == 0) {
 
     DEV_Module_Init();
     EPD_4IN2_V2_Init();
@@ -217,34 +218,32 @@ void displayDate() {
 }
 
 // Get the x-value that the given string should render at if desiring centered-text.
-int getXForCenteredText(const char *s, int screenWidth, int fontSizeInPX) {
-  return (screenWidth - (fontSizeInPX * strlen(s))) / 2;
+int getXForCenteredText(const char *s, int screen_width, int font_size_in_px) {
+  return (screen_width - (font_size_in_px * strlen(s))) / 2;
 }
 
 /* -- if current date is found in data.h extract its data in rows -- */
 String extractField(const String &line, int index) {
-  int startIndex = 0;
-  int endIndex = line.indexOf('&');
+  int start_index = 0;
+  int end_index = line.indexOf('&');
 
   for (int i = 0; i < index; i++) {
-    if (endIndex == -1)
+    if (end_index == -1)
       return "";
-    startIndex = endIndex + 1;
-    endIndex = line.indexOf('&', startIndex);
+    start_index = end_index + 1;
+    end_index = line.indexOf('&', start_index);
   }
 
-  if (endIndex == -1)
-    endIndex = line.length();
+  if (end_index == -1)
+    end_index = line.length();
 
-  return line.substring(startIndex, endIndex);
+  return line.substring(start_index, end_index);
 }
 
 /* -- check if current date exists in data.h file -- */
-void processYearData(const char *dataIndexed[], int dataSize, const char *readingsIndex[], String date) {
-  for (int i = 0; i < dataSize; i++) {
-    String line(dataIndexed[i]);
-    // Serial.println(line);
-
+void processYearData(const char *data_indexed[], int data_size, const char *readings_index[], String date) {
+  for (int i = 0; i < data_size; i++) {
+    String line(data_indexed[i]);    
     String idx = extractField(line, 0);
 
     if (idx == date) {
@@ -256,11 +255,11 @@ void processYearData(const char *dataIndexed[], int dataSize, const char *readin
       String eRow3 = extractField(line, 3);
 
       if (eRow1 != "")
-        row1 = readingsIndex[extractField(line, 1).toInt()];
+        row1 = readings_index[extractField(line, 1).toInt()];
       if (eRow2 != "")
-        row2 = readingsIndex[extractField(line, 2).toInt()];
+        row2 = readings_index[extractField(line, 2).toInt()];
       if (eRow3 != "")
-        row3 = readingsIndex[extractField(line, 3).toInt()];
+        row3 = readings_index[extractField(line, 3).toInt()];
 
       Serial.print("Row1: ");
       Serial.println(row1);
