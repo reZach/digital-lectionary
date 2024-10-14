@@ -9,14 +9,15 @@
 #include "reading_index.h"
 
 
-RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int screen_generated = 0;
+RTC_DATA_ATTR uint64_t remaining_sleep_time = 0;
+RTC_DATA_ATTR const uint64_t MAX_SLEEP_TIME = (uint64_t)9223372036854775807;  // This is the max sleep time for the ESP32 without crashing
 
 const PROGMEM int EPD_WIDTH = EPD_4IN2_WIDTH;
 const PROGMEM int EPD_HEIGHT = EPD_4IN2_HEIGHT;
 const PROGMEM char *WIFI_SSID = "";
 const PROGMEM char *WIFI_PW = "";
-const PROGMEM char *NTP_SERVER = "pool.ntp.org"; 
+const PROGMEM char *NTP_SERVER = "pool.ntp.org";
 const PROGMEM long GMT_OFFSET_SEC = -6 * 3600;  // timezone * 3600 (seconds in an hour); CST = -6
 const PROGMEM int DAYLIGHT_OFFSET_SEC = 3600;
 const PROGMEM String NOT_FOUND = "Not found";
@@ -37,13 +38,17 @@ String dayNames[] = { F("1st"), F("2nd"), F("3rd"), F("4th"), F("5th"), F("6th")
 RTC_DS3231 rtc;
 UBYTE *BlackImage;
 
-// Is ran after waking up from a deep sleep
-void RTC_IRAM_ATTR esp_wake_deep_sleep() {
-  esp_default_wake_deep_sleep();
-  boot_count++;
-}
-
 void setup() {
+  // If we are sleeping for more than 12 hours, we will
+  // have a value in remaining_sleep_time. We take this value and
+  // sleep the ESP32 for that time
+  if (screen_generated == 1 && remaining_sleep_time > 0) {
+    uint64_t temp = remaining_sleep_time;
+    remaining_sleep_time = 0;
+
+    esp_deep_sleep(temp);
+  }
+
   Serial.begin(115200);
 
   // Initialize the RTC
@@ -62,7 +67,7 @@ void setup() {
   Serial.println(hour_diff);
   Serial.println(min_diff);
   Serial.println(sec_diff);
-  uint64_t time_to_sleep = ((uint64_t)((hour_diff * 3600) + (min_diff * 60) + sec_diff)) * ((uint64_t)1000000);  // This number is in microseconds until 12am the next day  
+  uint64_t time_to_sleep = ((uint64_t)((hour_diff * 3600) + (min_diff * 60) + sec_diff)) * ((uint64_t)1000000);  // This number is in microseconds until 12am the next day
 
   // If the date hasn't generated, or we are in the wee-early
   // hours of the morning (12am), generate the verses
@@ -108,16 +113,35 @@ void setup() {
 
     screen_generated = 1;
 
-    Serial.println("boot_count");
-    Serial.println(boot_count);
+    if (time_to_sleep < MAX_SLEEP_TIME) {
+      esp_deep_sleep(time_to_sleep);
+    } else {
 
-    esp_deep_sleep(time_to_sleep);  // enter deep sleep until 12am the next day
+      // esp_deep_sleep has a bug where the maximum value we can sleep in
+      // a single call is uint64_t / 2. If we ever need to sleep more than
+      // 12 hours, we have to call esp_deep_sleep in 2 separate calls. We
+      // do that here, and in the beginning of the setup() function.
+
+      remaining_sleep_time = time_to_sleep - MAX_SLEEP_TIME;
+      esp_deep_sleep(MAX_SLEEP_TIME);
+    }
   } else {
 
     // In the case something errors out, let's log it
-    Serial.println("error");
+    Serial.println("shouldn't be in here");
 
-    esp_deep_sleep(time_to_sleep);  // enter deep sleep until 12am the next day
+    if (time_to_sleep < MAX_SLEEP_TIME) {
+      esp_deep_sleep(time_to_sleep);
+    } else {
+
+      // esp_deep_sleep has a bug where the maximum value we can sleep in
+      // a single call is uint64_t / 2. If we ever need to sleep more than
+      // 12 hours, we have to call esp_deep_sleep in 2 separate calls. We
+      // do that here, and in the beginning of the setup() function.
+
+      remaining_sleep_time = time_to_sleep - MAX_SLEEP_TIME;
+      esp_deep_sleep(MAX_SLEEP_TIME);
+    }
   }
 }
 
@@ -243,29 +267,26 @@ String extractField(const String &line, int index) {
 /* -- check if current date exists in data.h file -- */
 void processYearData(const char *data_indexed[], int data_size, const char *readings_index[], String date) {
   for (int i = 0; i < data_size; i++) {
-    String line(data_indexed[i]);    
+    String line(data_indexed[i]);
     String idx = extractField(line, 0);
 
-    if (idx == date) {
-      Serial.print("Extracted date: ");
-      Serial.println(idx);
+    if (idx == date) {      
+      String e_row_1 = extractField(line, 1);
+      String e_row_2 = extractField(line, 2);
+      String e_row_3 = extractField(line, 3);
 
-      String eRow1 = extractField(line, 1);
-      String eRow2 = extractField(line, 2);
-      String eRow3 = extractField(line, 3);
-
-      if (eRow1 != "")
+      if (e_row_1 != "")
         row1 = readings_index[extractField(line, 1).toInt()];
-      if (eRow2 != "")
+      if (e_row_2 != "")
         row2 = readings_index[extractField(line, 2).toInt()];
-      if (eRow3 != "")
+      if (e_row_3 != "")
         row3 = readings_index[extractField(line, 3).toInt()];
 
-      Serial.print("Row1: ");
+      Serial.print(F("Row1: "));
       Serial.println(row1);
-      Serial.print("Row2: ");
+      Serial.print(F("Row2: "));
       Serial.println(row2);
-      Serial.print("Row3: ");
+      Serial.print(F("Row3: "));
       Serial.println(row3);
 
       if (row1 == "-")
